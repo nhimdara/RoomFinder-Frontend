@@ -21,7 +21,9 @@ import {
   X,
   Layers,
   Sparkles,
-  Info
+  Info,
+  Compass,
+  Locate
 } from 'lucide-react';
 
 // Default center coordinates (University District)
@@ -99,15 +101,15 @@ const UNIVERSITY_LANDMARKS = [
   }
 ];
 
-// Helper to pan map to selected room
-const MapPanController = ({ selectedRoom }) => {
+// Helper to pan map to selected room or user location
+const MapPanController = ({ targetLocation }) => {
   const map = useMap();
   useEffect(() => {
-    if (map && selectedRoom && selectedRoom.lat && selectedRoom.lng) {
-      map.panTo({ lat: selectedRoom.lat, lng: selectedRoom.lng });
+    if (map && targetLocation && targetLocation.lat && targetLocation.lng) {
+      map.panTo({ lat: targetLocation.lat, lng: targetLocation.lng });
       map.setZoom(15);
     }
-  }, [map, selectedRoom]);
+  }, [map, targetLocation]);
   return null;
 };
 
@@ -120,11 +122,15 @@ export const InteractiveMap = ({
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const [activePopupRoom, setActivePopupRoom] = useState(null);
   const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'satellite'
+  const [userLocation, setUserLocation] = useState(null);
+  const [permissionStatus, setPermissionStatus] = useState('prompt'); // 'prompt' | 'granted' | 'denied'
+  const [loadingLocation, setLoadingLocation] = useState(false);
 
   const currentRoom = selectedRoom || activePopupRoom;
+  const targetLocation = currentRoom
+    ? { lat: currentRoom.lat, lng: currentRoom.lng }
+    : userLocation || DEFAULT_CENTER;
 
-  // If no user API key is provided, we offer a live Google Maps embed with interactive pins
-  // or the full @vis.gl/react-google-maps instance when key is present!
   const hasValidKey = apiKey && apiKey.length > 5 && !apiKey.includes('YOUR_KEY');
 
   const handleMarkerClick = (room) => {
@@ -132,8 +138,70 @@ export const InteractiveMap = ({
     if (onSelectRoom) onSelectRoom(room);
   };
 
+  const requestUserLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      alert('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserLocation(coords);
+        setPermissionStatus('granted');
+        setLoadingLocation(false);
+      },
+      (error) => {
+        console.warn('Geolocation permission denied:', error);
+        setPermissionStatus('denied');
+        setLoadingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
   return (
-    <div className="interactive-map-wrapper card">
+    <div className="interactive-map-wrapper card" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {/* Location Permission Request Banner */}
+      {permissionStatus !== 'granted' && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          left: '12px',
+          right: '12px',
+          zIndex: 35,
+          background: 'rgba(255, 255, 255, 0.96)',
+          backdropFilter: 'blur(8px)',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          border: '1px solid #c7d2fe',
+          boxShadow: '0 4px 16px rgba(15, 23, 42, 0.12)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={16} color="#2563EB" />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+              Allow location to view student rooms near your campus spot.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={requestUserLocation}
+            style={{ padding: '4px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
+            disabled={loadingLocation}
+          >
+            {loadingLocation ? 'Locating...' : 'Allow Location'}
+          </button>
+        </div>
+      )}
+
       {hasValidKey ? (
         <APIProvider apiKey={apiKey}>
           <Map
@@ -147,18 +215,26 @@ export const InteractiveMap = ({
             styles={MAP_STYLES}
             internalUsageAttributionIds={['gmp_git_agentskills_v1']}
           >
-            <MapPanController selectedRoom={selectedRoom} />
+            <MapPanController targetLocation={targetLocation} />
 
             {/* Custom Header Controls */}
             <MapControl position={ControlPosition.TOP_LEFT}>
-              <div className="map-layer-tag" style={{ margin: '12px' }}>
+              <div className="map-layer-tag" style={{ margin: permissionStatus !== 'granted' ? '54px 12px 12px' : '12px' }}>
                 <Layers size={14} color="#2563EB" />
                 <span>Google Maps Live</span>
               </div>
             </MapControl>
 
             <MapControl position={ControlPosition.TOP_RIGHT}>
-              <div className="map-view-switcher" style={{ margin: '12px', display: 'flex', gap: '4px', background: '#fff', padding: '4px', borderRadius: '8px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+              <div style={{
+                margin: permissionStatus !== 'granted' ? '54px 12px 12px' : '12px',
+                display: 'flex',
+                gap: '6px',
+                background: '#fff',
+                padding: '4px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
                 <button
                   className={`btn btn-sm ${mapType === 'roadmap' ? 'btn-primary' : 'btn-ghost'}`}
                   style={{ padding: '4px 10px', fontSize: '12px' }}
@@ -173,8 +249,30 @@ export const InteractiveMap = ({
                 >
                   Satellite
                 </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  style={{ padding: '4px 8px' }}
+                  title="Locate My Position"
+                  onClick={requestUserLocation}
+                >
+                  <Locate size={14} color="#2563EB" />
+                </button>
               </div>
             </MapControl>
+
+            {/* User Live GPS Marker */}
+            {userLocation && (
+              <AdvancedMarker position={userLocation} title="Your Location">
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: '#2563eb',
+                  border: '3px solid #ffffff',
+                  boxShadow: '0 0 0 6px rgba(37, 99, 235, 0.3)'
+                }} />
+              </AdvancedMarker>
+            )}
 
             {/* University Landmark Markers */}
             {UNIVERSITY_LANDMARKS.map((uni) => (
@@ -255,10 +353,10 @@ export const InteractiveMap = ({
       ) : (
         /* Real Interactive Google Maps Container with Real Satellite & Street Tiles */
         <div className="real-google-map-container" style={{ width: '100%', height: '100%', position: 'relative' }}>
-          {/* Live Google Map iframe view centered on University Hub */}
+          {/* Live Google Map iframe view centered on target coordinates */}
           <iframe
             title="Real Google Map View"
-            src={`https://maps.google.com/maps?q=${currentRoom ? `${currentRoom.lat},${currentRoom.lng}` : `${DEFAULT_CENTER.lat},${DEFAULT_CENTER.lng}`}&z=${selectedRoom ? 16 : 14}&t=${mapType === 'satellite' ? 'k' : 'm'}&output=embed`}
+            src={`https://maps.google.com/maps?q=${targetLocation.lat},${targetLocation.lng}&z=${selectedRoom ? 16 : 14}&t=${mapType === 'satellite' ? 'k' : 'm'}&output=embed`}
             width="100%"
             height="100%"
             style={{ border: 0, width: '100%', height: '100%', position: 'absolute', inset: 0 }}
@@ -268,7 +366,7 @@ export const InteractiveMap = ({
           />
 
           {/* Floating Map Overlay Control Bar */}
-          <div className="map-toolbar-overlay">
+          <div className="map-toolbar-overlay" style={{ marginTop: permissionStatus !== 'granted' ? '46px' : '0px' }}>
             <div className="map-layer-tag">
               <Layers size={14} color="#2563EB" />
               <span>Real Google Map View</span>
@@ -291,6 +389,15 @@ export const InteractiveMap = ({
                   onClick={() => setMapType('satellite')}
                 >
                   Satellite
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  style={{ padding: '4px 8px' }}
+                  title="Locate My Position"
+                  onClick={requestUserLocation}
+                >
+                  <Locate size={14} color="#2563EB" />
                 </button>
               </div>
             </div>
@@ -352,7 +459,7 @@ export const InteractiveMap = ({
               className="map-popup-card animate-fade-in"
               style={{
                 position: 'absolute',
-                top: '64px',
+                top: permissionStatus !== 'granted' ? '110px' : '64px',
                 right: '16px',
                 width: '280px',
                 zIndex: 20
@@ -400,3 +507,5 @@ export const InteractiveMap = ({
     </div>
   );
 };
+
+export default InteractiveMap;
