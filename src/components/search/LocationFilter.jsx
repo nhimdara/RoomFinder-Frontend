@@ -1,5 +1,5 @@
 import React from 'react';
-import { POPULAR_LOCATIONS } from '../../data/mockRooms';
+import { POPULAR_LOCATIONS } from '../../constants/roomConstants';
 
 export const LocationFilter = ({ selectedLocation, onSelectLocation }) => {
   return (

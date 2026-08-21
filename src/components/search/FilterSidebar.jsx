@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   ArrowUpDown
 } from 'lucide-react';
-import { ROOM_TYPES, AMENITIES_LIST } from '../../data/mockRooms';
+import { ROOM_TYPES, AMENITIES_LIST } from '../../constants/roomConstants';
 
 export const FilterSidebar = ({ totalResults = 0, isMobileOpen = false, onCloseMobile = null }) => {
   const { searchFilters, setSearchFilters } = useApp();

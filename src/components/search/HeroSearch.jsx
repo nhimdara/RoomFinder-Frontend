@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Search, MapPin, Home, DollarSign, ArrowRight, Sparkles } from 'lucide-react';
-import { ROOM_TYPES } from '../../data/mockRooms';
+import { ROOM_TYPES } from '../../constants/roomConstants';
 
 export const HeroSearch = () => {
   const { searchFilters, setSearchFilters, navigateTo } = useApp();

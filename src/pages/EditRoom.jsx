@@ -10,7 +10,7 @@ import {
   Save,
   ShieldCheck
 } from 'lucide-react';
-import { ROOM_TYPES, AMENITIES_LIST } from '../data/mockRooms';
+import { ROOM_TYPES, AMENITIES_LIST } from '../constants/roomConstants';
 
 export const EditRoom = () => {
   const { rooms, pageParams, updateRoom, navigateTo, addToast } = useApp();

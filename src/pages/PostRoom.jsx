@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   Image as ImageIcon
 } from 'lucide-react';
-import { ROOM_TYPES, AMENITIES_LIST } from '../data/mockRooms';
+import { ROOM_TYPES, AMENITIES_LIST } from '../constants/roomConstants';
 
 const SAMPLE_PHOTO_PRESETS = [
   'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80',

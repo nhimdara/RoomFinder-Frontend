@@ -103,9 +103,11 @@ frontend/
 │   │   └── useDebounce.js       # Search input debouncer
 │   │
 │   ├── data/
-│   │   ├── rooms.js             # Room listings & popular locations
-│   │   ├── amenities.js         # Amenities catalog & icon mapping
-│   │   └── mockRooms.js         # Initial mock database
+│   │   ├── rooms.js             # Room listings & popular locations metadata
+│   │   └── amenities.js         # Amenities catalog & icon mapping
+│   │
+│   ├── constants/
+│   │   └── roomConstants.js     # Room types and campus hubs metadata
 │   │
 │   ├── utils/
 │   │   ├── formatPrice.js       # Currency formatting
@@ -127,13 +129,15 @@ frontend/
 
 ## 🚀 Quickstart
 
-1. **Install Dependencies**:
+1. **Start Laravel Backend** (Port 8000):
    ```bash
-   npm install
+   cd ../../RoomFinder_Backend
+   php artisan serve
    ```
 
-2. **Run Dev Server**:
+2. **Start Frontend Web App**:
    ```bash
+   npm install
    npm run dev
    ```
 
@@ -144,8 +148,8 @@ frontend/
 
 ---
 
-## 🔑 Demo Logins
+## 🔑 Database Accounts (Laravel Seeded)
 
-- **🎓 Student / Seeker**: `alex.rivera@stanford.edu` (Alex Rivera)
-- **🏠 Landlord / Owner**: `sarah.j@roomfinder.com` (Sarah Jenkins)
-- **🛡️ Super Admin**: `admin@roomfinder.com` (Platform Super Admin)
+- **🎓 Student / Seeker**: `bopha.student@roomfinder.test` / `password`
+- **🏠 Landlord / Owner**: `sokha.owner@roomfinder.test` / `password`
+- **🛡️ Super Admin**: `admin@roomfinder.test` / `password`

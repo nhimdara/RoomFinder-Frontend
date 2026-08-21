@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { HeroSearch } from '../components/search/HeroSearch';
 import { RoomCard } from '../components/room/RoomCard';
-import { POPULAR_LOCATIONS } from '../data/mockRooms';
+import { POPULAR_LOCATIONS } from '../constants/roomConstants';
 import {
   ShieldCheck,
   Zap,
