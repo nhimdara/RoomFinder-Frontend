@@ -1,45 +1,100 @@
+import apiClient from './api';
+
 /**
- * Authentication and OTP Verification Service
+ * Authentication and OTP Verification Service using Laravel Sanctum Backend
  */
 export const authService = {
-  login: async (email, password, role = 'student') => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          id: `user-${Date.now()}`,
-          email,
-          role,
-          name: role === 'owner' ? 'Sarah Jenkins' : role === 'admin' ? 'Super Admin' : 'Alex Rivera',
-          token: `jwt-mock-${Date.now()}`
-        });
-      }, 200);
+  login: async (identifier, password, deviceName = 'web-browser') => {
+    const response = await apiClient.post('auth/login', {
+      identifier,
+      password,
+      device_name: deviceName
     });
+
+    if (response?.data?.token) {
+      localStorage.setItem('rf_token', response.data.token);
+      localStorage.setItem('rf_user', JSON.stringify(response.data.user));
+    }
+
+    return response.data;
   },
 
   register: async (userData) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          ...userData,
-          id: `user-${Date.now()}`,
-          token: `jwt-mock-${Date.now()}`
-        });
-      }, 200);
+    const response = await apiClient.post('auth/register', userData);
+    return response.data;
+  },
+
+  sendOtp: async (identifier, type = 'register') => {
+    const response = await apiClient.post('auth/send-otp', {
+      identifier,
+      type
     });
+    return response;
   },
 
-  sendOtp: async (email) => {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    return { success: true, email, otp };
+  verifyOtp: async (identifier, otp, type = 'register', deviceName = 'web-browser') => {
+    const response = await apiClient.post('auth/verify-otp', {
+      identifier,
+      otp,
+      type,
+      device_name: deviceName
+    });
+
+    if (response?.data?.token) {
+      localStorage.setItem('rf_token', response.data.token);
+      localStorage.setItem('rf_user', JSON.stringify(response.data.user));
+    }
+
+    return response.data;
   },
 
-  verifyOtp: async (email, code, expectedCode) => {
-    const isValid = code === expectedCode || code === '849201';
-    return { success: isValid };
+  resendOtp: async (identifier, type = 'register') => {
+    const response = await apiClient.post('auth/resend-otp', {
+      identifier,
+      type
+    });
+    return response;
   },
 
-  resetPassword: async (email, newPassword) => {
-    return { success: true, message: 'Password updated successfully' };
+  forgotPassword: async (identifier) => {
+    const response = await apiClient.post('auth/forgot-password', {
+      identifier
+    });
+    return response;
+  },
+
+  resetPassword: async ({ identifier, otp, password, password_confirmation }) => {
+    const response = await apiClient.post('auth/reset-password', {
+      identifier,
+      otp,
+      password,
+      password_confirmation
+    });
+    return response;
+  },
+
+  getMe: async () => {
+    try {
+      const response = await apiClient.get('auth/me');
+      if (response?.data) {
+        localStorage.setItem('rf_user', JSON.stringify(response.data));
+      }
+      return response.data;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  logout: async () => {
+    try {
+      await apiClient.post('auth/logout');
+    } catch {
+      // Continue clearing local state regardless
+    } finally {
+      localStorage.removeItem('rf_token');
+      localStorage.removeItem('rf_user');
+    }
+    return { success: true };
   }
 };
 

@@ -1,36 +1,33 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Building2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import authService from '../services/authService';
+import { Building2, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
 
 export const Login = () => {
-  const { loginUser, navigateTo } = useApp();
-  const [email, setEmail] = useState('alex.rivera@university.edu');
-  const [password, setPassword] = useState('••••••••');
+  const { loginUser, navigateTo, addToast } = useApp();
+  const [email, setEmail] = useState('bopha.student@roomfinder.test');
+  const [password, setPassword] = useState('password');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const isSuperAdmin = email.toLowerCase().includes('admin');
-    const isOwner =
-      email.toLowerCase().includes('sarah') ||
-      email.toLowerCase().includes('landlord') ||
-      email.toLowerCase().includes('realty') ||
-      email.toLowerCase().includes('chen') ||
-      email.toLowerCase().includes('vance');
-    const detectedRole = isSuperAdmin ? 'admin' : isOwner ? 'owner' : 'student';
+    setIsLoading(true);
+    try {
+      const data = await authService.login(email, password);
+      if (data?.user) {
+        loginUser(data.user);
+      }
+    } catch (err) {
+      addToast(err.message || 'Login failed. Please check your credentials.', 'danger');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    loginUser({
-      id: `user-${Date.now()}`,
-      name: isSuperAdmin ? 'Platform Super Admin' : isOwner ? 'Sarah Jenkins' : 'Alex Rivera',
-      email: email,
-      avatar: isSuperAdmin
-        ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'
-        : isOwner
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      role: detectedRole,
-      phone: '+1 (555) 234-8901'
-    });
+  const handleQuickFill = (demoEmail, demoPassword = 'password') => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
   };
 
   return (
@@ -50,16 +47,16 @@ export const Login = () => {
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="form-group">
-          <label className="form-label">Email Address</label>
+          <label className="form-label">Email or Phone</label>
           <div className="input-with-icon">
             <Mail size={18} className="input-icon" />
             <input
-              type="email"
+              type="text"
               required
               className="form-input with-left-icon"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@university.edu"
+              placeholder="e.g. student@roomfinder.test"
             />
           </div>
         </div>
@@ -86,10 +83,54 @@ export const Login = () => {
           </div>
         </div>
 
-        <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: '12px' }}>
-          <span>Sign In</span>
-          <ArrowRight size={16} />
+        <button
+          type="submit"
+          className="btn btn-primary btn-lg"
+          style={{ width: '100%', marginTop: '12px' }}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 size={18} className="spin-animate" />
+              <span>Authenticating...</span>
+            </>
+          ) : (
+            <>
+              <span>Sign In</span>
+              <ArrowRight size={16} />
+            </>
+          )}
         </button>
+
+        {/* Quick Demo Fill Buttons */}
+        <div style={{ marginTop: '20px', padding: '12px', background: 'var(--bg-secondary, #f8fafc)', borderRadius: '8px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', marginBottom: '8px', textAlign: 'center' }}>
+            Quick Demo Accounts (Database Seeded)
+          </div>
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => handleQuickFill('bopha.student@roomfinder.test')}
+            >
+              Student
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => handleQuickFill('sokha.owner@roomfinder.test')}
+            >
+              Owner
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => handleQuickFill('admin@roomfinder.test')}
+            >
+              Admin
+            </button>
+          </div>
+        </div>
 
         <div className="auth-footer-switch">
           <p>

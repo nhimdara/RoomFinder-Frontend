@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Calendar, Clock, MapPin, Building2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Building2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export const MyBookings = () => {
   const { inquiries, rooms, navigateTo } = useApp();
@@ -14,60 +14,88 @@ export const MyBookings = () => {
         </div>
       </div>
 
-      <div className="inquiries-cards-stack">
-        {inquiries.map((inq) => {
-          const room = rooms.find((r) => r.id === inq.roomId);
-          return (
-            <div key={inq.id} className="card" style={{ padding: '20px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <img
-                src={inq.roomImage || room?.images[0] || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=400&q=80'}
-                alt={inq.roomTitle}
-                style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '8px' }}
-              />
+      {inquiries.length === 0 ? (
+        <div className="card" style={{ padding: '48px', textAlign: 'center' }}>
+          <Building2 size={44} color="#94a3b8" style={{ margin: '0 auto 16px' }} />
+          <h3>No Booking Inquiries Yet</h3>
+          <p style={{ color: '#64748b', marginTop: '8px' }}>
+            When you request to tour or book student accommodations, your active requests will appear here.
+          </p>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: '16px' }}
+            onClick={() => navigateTo('rooms')}
+          >
+            Explore Accommodations
+          </button>
+        </div>
+      ) : (
+        <div className="inquiries-cards-stack">
+          {inquiries.map((inq) => {
+            const targetRoomId = inq.room?.id || inq.room_id || inq.roomId;
+            const roomTitle = inq.room?.title || inq.roomTitle || 'Room Accommodation';
+            const roomImage =
+              inq.room?.images?.[0]?.url ||
+              (typeof inq.room?.images?.[0] === 'string' ? inq.room?.images?.[0] : null) ||
+              inq.roomImage ||
+              'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=400&q=80';
 
-              <div style={{ flex: 1, minWidth: '220px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 700 }}>{inq.roomTitle}</h3>
-                  <span
-                    className={`badge ${
-                      inq.status === 'approved'
-                        ? 'badge-success'
-                        : inq.status === 'declined'
-                        ? 'badge-danger'
-                        : 'badge-warning'
-                    }`}
-                  >
-                    {inq.status === 'approved' && '✅ Tour Confirmed'}
-                    {inq.status === 'pending' && '⏳ Awaiting Landlord'}
-                    {inq.status === 'declined' && '❌ Declined'}
-                  </span>
+            const moveIn = inq.move_in_date || inq.moveInDate || 'Not specified';
+            const status = (inq.status || 'pending').toLowerCase();
+            const createdAt = inq.created_at ? new Date(inq.created_at).toLocaleDateString() : inq.createdAt || 'Recent';
+
+            return (
+              <div key={inq.id} className="card" style={{ padding: '20px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <img
+                  src={roomImage}
+                  alt={roomTitle}
+                  style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '8px' }}
+                />
+
+                <div style={{ flex: 1, minWidth: '220px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: 700 }}>{roomTitle}</h3>
+                    <span
+                      className={`badge ${
+                        status === 'approved'
+                          ? 'badge-success'
+                          : status === 'rejected' || status === 'declined' || status === 'cancelled'
+                          ? 'badge-danger'
+                          : 'badge-warning'
+                      }`}
+                    >
+                      {status === 'approved' && '✅ Booking Approved'}
+                      {status === 'pending' && '⏳ Awaiting Landlord'}
+                      {status === 'rejected' && '❌ Declined by Host'}
+                      {status === 'cancelled' && '🚫 Cancelled'}
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: '12.5px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                    <span><Calendar size={13} style={{ verticalAlign: '-2px' }} /> Move-in: {moveIn}</span>
+                    <span>Created: {createdAt}</span>
+                  </p>
+
+                  {inq.message && (
+                    <p style={{ fontSize: '13px', color: '#334155', fontStyle: 'italic', marginTop: '6px', background: '#F8FAFC', padding: '6px 10px', borderRadius: '6px' }}>
+                      "{inq.message}"
+                    </p>
+                  )}
                 </div>
 
-                <p style={{ fontSize: '12.5px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                  <span><Calendar size={13} style={{ verticalAlign: '-2px' }} /> Move-in: {inq.moveInDate}</span>
-                  <span><Clock size={13} style={{ verticalAlign: '-2px' }} /> Lease: {inq.duration}</span>
-                  <span>Created: {inq.createdAt}</span>
-                </p>
-
-                {inq.message && (
-                  <p style={{ fontSize: '13px', color: '#334155', fontStyle: 'italic', marginTop: '6px', background: '#F8FAFC', padding: '6px 10px', borderRadius: '6px' }}>
-                    "{inq.message}"
-                  </p>
-                )}
+                <div>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => navigateTo('room-details', targetRoomId)}
+                  >
+                    View Listing
+                  </button>
+                </div>
               </div>
-
-              <div>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => navigateTo('room-details', inq.roomId)}
-                >
-                  View Listing
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

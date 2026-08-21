@@ -9,11 +9,12 @@ import {
   Map as MapIcon,
   SlidersHorizontal,
   Search,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 
 export const Rooms = () => {
-  const { rooms, searchFilters, setSearchFilters } = useApp();
+  const { rooms, searchFilters, setSearchFilters, isLoadingRooms } = useApp();
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'grid' | 'map'
   const [selectedRoomOnMap, setSelectedRoomOnMap] = useState(null);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -21,38 +22,41 @@ export const Rooms = () => {
   // Apply filters to rooms
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
-      // Keyword search (matches title, address, district, university)
+      // Keyword search (matches title, address, description)
       if (searchFilters.keyword) {
-        const query = searchFilters.keyword.toLowerCase();
-        const match =
-          room.title.toLowerCase().includes(query) ||
-          room.address.toLowerCase().includes(query) ||
-          room.district.toLowerCase().includes(query) ||
-          room.distanceToCampus.toLowerCase().includes(query);
-        if (!match) return false;
+        const query = searchFilters.keyword.toLowerCase().trim();
+        const titleMatch = (room.title || '').toLowerCase().includes(query);
+        const addressMatch = (room.address || room.location || '').toLowerCase().includes(query);
+        const descMatch = (room.description || '').toLowerCase().includes(query);
+        if (!titleMatch && !addressMatch && !descMatch) return false;
       }
 
       // Room Type filter
       if (searchFilters.roomType && searchFilters.roomType !== 'all') {
-        if (room.roomType !== searchFilters.roomType) return false;
+        const rType = (room.room_type || room.roomType || '').toLowerCase();
+        if (rType !== searchFilters.roomType.toLowerCase()) return false;
       }
 
       // Price filter
-      if (room.price > searchFilters.maxPrice) return false;
+      if (searchFilters.maxPrice && room.price > searchFilters.maxPrice) return false;
+      if (searchFilters.minPrice && room.price < searchFilters.minPrice) return false;
 
       // Amenities filter (must contain all selected amenities)
       if (searchFilters.selectedAmenities && searchFilters.selectedAmenities.length > 0) {
-        const hasAllAmenities = searchFilters.selectedAmenities.every((a) =>
-          room.amenities.includes(a)
+        const roomAmenities = Array.isArray(room.amenities)
+          ? room.amenities.map((a) => (typeof a === 'string' ? a.toLowerCase() : (a.name || '').toLowerCase()))
+          : [];
+        const hasAll = searchFilters.selectedAmenities.every((a) =>
+          roomAmenities.some((ra) => ra.includes(a.toLowerCase()))
         );
-        if (!hasAllAmenities) return false;
+        if (!hasAll) return false;
       }
 
       return true;
     }).sort((a, b) => {
       if (searchFilters.sortBy === 'price-low') return a.price - b.price;
       if (searchFilters.sortBy === 'price-high') return b.price - a.price;
-      if (searchFilters.sortBy === 'rating') return b.rating - a.rating;
+      if (searchFilters.sortBy === 'rating') return (b.average_rating || b.rating || 0) - (a.average_rating || a.rating || 0);
       return 0; // recommended
     });
   }, [rooms, searchFilters]);
@@ -110,103 +114,94 @@ export const Rooms = () => {
           </div>
         </div>
 
-        {/* Active Filter Tags Bar */}
-        {(searchFilters.keyword ||
-          searchFilters.roomType !== 'all' ||
-          searchFilters.maxPrice < 600 ||
-          searchFilters.selectedAmenities.length > 0) && (
-          <div className="active-filters-chips-bar">
-            <span className="active-filters-label">Active Filters:</span>
-            {searchFilters.keyword && (
-              <span className="active-filter-chip">
-                "{searchFilters.keyword}"
-                <button
-                  onClick={() =>
-                    setSearchFilters((prev) => ({ ...prev, keyword: '' }))
-                  }
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {searchFilters.roomType !== 'all' && (
-              <span className="active-filter-chip">
-                Type: {searchFilters.roomType}
-                <button
-                  onClick={() =>
-                    setSearchFilters((prev) => ({ ...prev, roomType: 'all' }))
-                  }
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {searchFilters.maxPrice < 600 && (
-              <span className="active-filter-chip">
-                Under ${searchFilters.maxPrice}/mo
-                <button
-                  onClick={() =>
-                    setSearchFilters((prev) => ({ ...prev, maxPrice: 600 }))
-                  }
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {searchFilters.selectedAmenities.map((amenity) => (
-              <span key={amenity} className="active-filter-chip">
-                {amenity}
-                <button
-                  onClick={() =>
-                    setSearchFilters((prev) => ({
-                      ...prev,
-                      selectedAmenities: prev.selectedAmenities.filter(
-                        (a) => a !== amenity
-                      )
-                    }))
-                  }
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
         {/* Main Content Layout */}
-        <div className={`rooms-main-layout view-${viewMode}`}>
-          {/* Left Column: Filter Sidebar */}
-          <div className="rooms-filter-col">
-            <FilterSidebar
-              totalResults={filteredRooms.length}
-              isMobileOpen={isMobileFilterOpen}
-              onCloseMobile={() => setIsMobileFilterOpen(false)}
-            />
-          </div>
-
-          {/* Middle Column: Room Listings */}
-          {viewMode !== 'map' && (
-            <div className="rooms-listings-col">
-              <RoomGrid
-                rooms={filteredRooms}
-                selectedRoom={selectedRoomOnMap}
-                onSelectRoom={(r) => setSelectedRoomOnMap(r)}
-              />
+        <div className="rooms-content-layout">
+          {/* Left Sidebar Filter */}
+          <aside className={`rooms-filter-sidebar ${isMobileFilterOpen ? 'mobile-open' : ''}`}>
+            <div className="mobile-filter-header">
+              <h3>Filter Rooms</h3>
+              <button
+                className="close-filter-btn"
+                onClick={() => setIsMobileFilterOpen(false)}
+              >
+                <X size={20} />
+              </button>
             </div>
-          )}
+            <FilterSidebar />
+          </aside>
 
-          {/* Right Column: Interactive Map */}
-          {viewMode !== 'grid' && (
-            <div className="rooms-map-col">
-              <InteractiveMap
-                rooms={filteredRooms}
-                selectedRoom={selectedRoomOnMap}
-                onSelectRoom={(r) => setSelectedRoomOnMap(r)}
-              />
-            </div>
-          )}
+          {/* Center / Right Content Panel */}
+          <main className="rooms-main-view">
+            {isLoadingRooms ? (
+              <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                <Loader2 size={32} className="spin-animate" style={{ color: 'var(--primary, #3b82f6)', margin: '0 auto 12px' }} />
+                <p style={{ color: '#64748b' }}>Fetching accommodation listings...</p>
+              </div>
+            ) : filteredRooms.length === 0 ? (
+              <div className="empty-rooms-card card text-center">
+                <Search size={42} color="#94A3B8" style={{ margin: '0 auto 16px' }} />
+                <h3>No Rooms Found</h3>
+                <p>Try adjusting your search terms, price limit, or removing some amenities filters.</p>
+                <button
+                  className="btn btn-secondary"
+                  style={{ marginTop: '16px' }}
+                  onClick={() =>
+                    setSearchFilters({
+                      keyword: '',
+                      roomType: 'all',
+                      minPrice: 0,
+                      maxPrice: 600,
+                      selectedAmenities: [],
+                      sortBy: 'recommended'
+                    })
+                  }
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            ) : (
+              <>
+                {viewMode === 'split' && (
+                  <div className="split-view-container">
+                    <div className="split-grid-col">
+                      <RoomGrid
+                        rooms={filteredRooms}
+                        selectedRoomId={selectedRoomOnMap?.id}
+                        onRoomSelect={(r) => setSelectedRoomOnMap(r)}
+                      />
+                    </div>
+                    <div className="split-map-col">
+                      <InteractiveMap
+                        rooms={filteredRooms}
+                        selectedRoom={selectedRoomOnMap}
+                        onSelectRoom={(r) => setSelectedRoomOnMap(r)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {viewMode === 'grid' && (
+                  <div className="grid-only-container">
+                    <RoomGrid rooms={filteredRooms} />
+                  </div>
+                )}
+
+                {viewMode === 'map' && (
+                  <div className="map-only-container">
+                    <InteractiveMap
+                      rooms={filteredRooms}
+                      selectedRoom={selectedRoomOnMap}
+                      onSelectRoom={(r) => setSelectedRoomOnMap(r)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </main>
         </div>
       </div>
     </div>
   );
 };
+
+export default Rooms;

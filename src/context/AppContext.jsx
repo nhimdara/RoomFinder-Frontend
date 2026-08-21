@@ -1,114 +1,35 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  INITIAL_ROOMS,
-  INITIAL_INQUIRIES,
-  INITIAL_OWNERS,
-  INITIAL_ADMIN_LOGS,
-  INITIAL_BROADCAST_EMAILS
-} from '../data/mockRooms';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import authService from '../services/authService';
+import roomService from '../services/roomService';
+import bookingService from '../services/bookingService';
+import favoriteService from '../services/favoriteService';
+import adminService from '../services/adminService';
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
-  // Load state from localStorage or use defaults
-  const [rooms, setRooms] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_rooms');
-      return saved ? JSON.parse(saved) : INITIAL_ROOMS;
-    } catch {
-      return INITIAL_ROOMS;
-    }
-  });
+  // Live state from Backend API
+  const [rooms, setRooms] = useState([]);
+  const [featuredRooms, setFeaturedRooms] = useState([]);
+  const [favorites, setFavorites] = useState([]); // List of room IDs
+  const [inquiries, setInquiries] = useState([]); // Bookings / inquiries
+  const [owners, setOwners] = useState([]);
+  const [adminLogs, setAdminLogs] = useState([]);
+  const [broadcastEmails, setBroadcastEmails] = useState([]);
+  const [ownerRequests, setOwnerRequests] = useState([]);
+  const [adminStats, setAdminStats] = useState(null);
 
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_favorites');
-      return saved ? JSON.parse(saved) : ['room-1', 'room-4'];
-    } catch {
-      return ['room-1', 'room-4'];
-    }
-  });
+  // Loading states
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const [inquiries, setInquiries] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_inquiries');
-      return saved ? JSON.parse(saved) : INITIAL_INQUIRIES;
-    } catch {
-      return INITIAL_INQUIRIES;
-    }
-  });
-
-  const [owners, setOwners] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_owners');
-      return saved ? JSON.parse(saved) : INITIAL_OWNERS;
-    } catch {
-      return INITIAL_OWNERS;
-    }
-  });
-
-  const [adminLogs, setAdminLogs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_admin_logs');
-      return saved ? JSON.parse(saved) : INITIAL_ADMIN_LOGS;
-    } catch {
-      return INITIAL_ADMIN_LOGS;
-    }
-  });
-
-  const [broadcastEmails, setBroadcastEmails] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_admin_emails');
-      return saved ? JSON.parse(saved) : INITIAL_BROADCAST_EMAILS;
-    } catch {
-      return INITIAL_BROADCAST_EMAILS;
-    }
-  });
-
-  const [ownerRequests, setOwnerRequests] = useState(() => {
-    try {
-      const saved = localStorage.getItem('rf_owner_requests');
-      return saved
-        ? JSON.parse(saved)
-        : [
-            {
-              id: 'req-001',
-              applicantId: 'user-001',
-              applicantName: 'Alex Rivera',
-              applicantEmail: 'alex.rivera@university.edu',
-              applicantPhone: '+1 (555) 234-8901',
-              propertyArea: 'University Science Campus District',
-              documentType: 'National ID & Land Title Deed',
-              messageToAdmin: 'Hello Admin, I am managing a 3-unit studio apartment building for students and would like to list them on RoomFinder. Please review my attached deed and approve my landlord host account.',
-              submittedAt: 'Today at 09:15 AM',
-              status: 'pending' // 'pending' | 'approved' | 'declined'
-            }
-          ];
-    } catch {
-      return [];
-    }
-  });
-
+  // Authenticated user
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('rf_user');
-      return saved ? JSON.parse(saved) : {
-        id: 'user-001',
-        name: 'Alex Rivera',
-        email: 'alex.rivera@university.edu',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-        role: 'student',
-        phone: '+1 (555) 234-8901'
-      };
+      return saved ? JSON.parse(saved) : null;
     } catch {
-      return {
-        id: 'user-001',
-        name: 'Alex Rivera',
-        email: 'alex.rivera@university.edu',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-        role: 'student',
-        phone: '+1 (555) 234-8901'
-      };
+      return null;
     }
   });
 
@@ -133,29 +54,135 @@ export const AppProvider = ({ children }) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
 
-  // Persist user auth, rooms & favorites to localStorage
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('rf_user', JSON.stringify(currentUser));
+  // Toast helpers
+  const addToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Router navigation helper
+  const navigateTo = (page, params = null) => {
+    setActivePage(page);
+    setPageParams(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Fetch verified rooms from backend
+  const fetchRooms = useCallback(async (filters = {}) => {
+    setIsLoadingRooms(true);
+    try {
+      const data = await roomService.getRooms(filters);
+      setRooms(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load rooms from backend:', err);
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  }, []);
+
+  // Fetch featured rooms
+  const fetchFeaturedRooms = useCallback(async () => {
+    try {
+      const data = await roomService.getFeaturedRooms();
+      setFeaturedRooms(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load featured rooms:', err);
+    }
+  }, []);
+
+  // Fetch user favorites
+  const fetchFavorites = useCallback(async () => {
+    if (!currentUser || currentUser.role !== 'student') return;
+    try {
+      const data = await favoriteService.getFavorites();
+      const favIds = Array.isArray(data) ? data.map((r) => r.id) : [];
+      setFavorites(favIds);
+    } catch (err) {
+      console.error('Failed to fetch favorites:', err);
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    localStorage.setItem('rf_rooms', JSON.stringify(rooms));
-  }, [rooms]);
+  // Fetch inquiries / bookings
+  const fetchInquiries = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      if (currentUser.role === 'owner') {
+        const data = await bookingService.getOwnerBookings();
+        setInquiries(Array.isArray(data) ? data : []);
+      } else if (currentUser.role === 'student') {
+        const data = await bookingService.getStudentBookings();
+        setInquiries(Array.isArray(data) ? data : []);
+      } else if (currentUser.role === 'admin') {
+        const data = await bookingService.getAdminBookings();
+        setInquiries(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch bookings/inquiries:', err);
+    }
+  }, [currentUser]);
 
-  useEffect(() => {
-    localStorage.setItem('rf_favorites', JSON.stringify(favorites));
-  }, [favorites]);
+  // Fetch admin dashboard stats & data
+  const fetchAdminData = useCallback(async () => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    try {
+      const stats = await adminService.getDashboard();
+      setAdminStats(stats);
+      const userList = await adminService.getUsers();
+      setOwners(Array.isArray(userList) ? userList.filter((u) => u.role === 'owner') : []);
+    } catch (err) {
+      console.error('Failed to fetch admin data:', err);
+    }
+  }, [currentUser]);
 
+  // Validate session on mount
   useEffect(() => {
-    localStorage.setItem('rf_inquiries', JSON.stringify(inquiries));
-  }, [inquiries]);
+    const initAuth = async () => {
+      const token = localStorage.getItem('rf_token');
+      if (token) {
+        try {
+          const user = await authService.getMe();
+          if (user) {
+            setCurrentUser(user);
+          } else {
+            localStorage.removeItem('rf_token');
+            localStorage.removeItem('rf_user');
+            setCurrentUser(null);
+          }
+        } catch {
+          localStorage.removeItem('rf_token');
+          localStorage.removeItem('rf_user');
+          setCurrentUser(null);
+        }
+      }
+      setIsLoadingAuth(false);
+    };
+
+    initAuth();
+    fetchRooms();
+    fetchFeaturedRooms();
+  }, [fetchRooms, fetchFeaturedRooms]);
+
+  // Sync user-dependent data
+  useEffect(() => {
+    if (currentUser) {
+      fetchFavorites();
+      fetchInquiries();
+      if (currentUser.role === 'admin') {
+        fetchAdminData();
+      }
+    }
+  }, [currentUser, fetchFavorites, fetchInquiries, fetchAdminData]);
 
   // Auth actions
   const loginUser = (userObj) => {
     setCurrentUser(userObj);
-    localStorage.setItem('rf_user', JSON.stringify(userObj));
     setIsAuthModalOpen(false);
     addToast(
       `Welcome back, ${userObj.name}! Logged in as ${
@@ -176,412 +203,200 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const logoutUser = () => {
-    const guestStudent = {
-      id: 'guest',
-      name: 'Guest Student',
-      email: 'guest@roomfinder.com',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      role: 'student',
-      phone: ''
-    };
-    setCurrentUser(guestStudent);
-    localStorage.setItem('rf_user', JSON.stringify(guestStudent));
+  const logoutUser = async () => {
+    await authService.logout();
+    setCurrentUser(null);
+    setFavorites([]);
+    setInquiries([]);
     addToast('Signed out successfully', 'info');
     navigateTo('home');
   };
 
-  // Notification helper
-  const addToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
-  };
+  // Toggle favorite room via live API
+  const toggleFavorite = async (roomId) => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      addToast('Please log in to save favorite rooms.', 'info');
+      return;
+    }
+    if (currentUser.role !== 'student') {
+      addToast('Only student accounts can save favorites.', 'info');
+      return;
+    }
 
-  const removeToast = (id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  // Router navigation helper
-  const navigateTo = (page, params = null) => {
-    setActivePage(page);
-    setPageParams(params);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Toggle favorite room
-  const toggleFavorite = (roomId) => {
-    setFavorites((prev) => {
-      const isFav = prev.includes(roomId);
+    const isFav = favorites.includes(roomId);
+    try {
       if (isFav) {
+        await favoriteService.removeFavorite(roomId);
+        setFavorites((prev) => prev.filter((id) => id !== roomId));
         addToast('Removed from your saved rooms', 'info');
-        return prev.filter((id) => id !== roomId);
       } else {
+        await favoriteService.addFavorite(roomId);
+        setFavorites((prev) => [...prev, roomId]);
         addToast('Saved to your favorites ❤️', 'success');
-        return [...prev, roomId];
       }
-    });
-  };
-
-  // Switch role between Student and Owner
-  const switchRole = (newRole) => {
-    setCurrentUser((prev) => ({ ...prev, role: newRole }));
-    addToast(`Switched view to ${newRole === 'owner' ? 'Property Owner / Landlord' : 'Student / Room Seeker'} mode`);
-    if (newRole === 'owner' && activePage === 'home') {
-      navigateTo('owner-dashboard');
-    } else if (newRole === 'student' && activePage.startsWith('owner')) {
-      navigateTo('home');
+    } catch (err) {
+      addToast(err.message || 'Failed to update favorites', 'danger');
     }
   };
 
-  // Add new room listing
-  const addRoom = (roomData) => {
-    const newRoom = {
-      id: `room-${Date.now()}`,
-      rating: 5.0,
-      reviewCount: 0,
-      verified: true,
-      featured: false,
-      status: 'active',
-      ownerId: currentUser.id,
-      mapX: Math.floor(Math.random() * 60) + 20,
-      mapY: Math.floor(Math.random() * 60) + 20,
-      landlord: {
-        name: currentUser.name,
-        role: 'Verified Landlord',
-        avatar: currentUser.avatar,
-        phone: currentUser.phone,
-        email: currentUser.email,
-        verifiedHost: true,
-        responseRate: '100%',
-        responseTime: 'Within 5 minutes',
-        totalListings: 1
-      },
-      reviews: [],
-      nearbyPlaces: [
-        { name: 'Nearest Campus Gate', distance: '400m (5 mins walk)' },
-        { name: 'Public Transit Station', distance: '250m (3 mins walk)' }
-      ],
-      ...roomData
-    };
+  // Switch role (for UI development/testing)
+  const switchRole = (newRole) => {
+    if (currentUser) {
+      setCurrentUser((prev) => ({ ...prev, role: newRole }));
+      addToast(`Switched view to ${newRole === 'owner' ? 'Property Owner / Landlord' : newRole === 'admin' ? 'Super Admin' : 'Student'} mode`);
+    }
+  };
 
-    setRooms((prev) => [newRoom, ...prev]);
-    addToast('New room listing published successfully! 🎉', 'success');
-    navigateTo('my-listings');
+  // Add new room listing via backend API
+  const addRoom = async (roomData) => {
+    try {
+      const created = await roomService.createOwnerRoom(roomData);
+      setRooms((prev) => [created, ...prev]);
+      addToast('New room listing submitted for verification! 🎉', 'success');
+      navigateTo('my-listings');
+      return created;
+    } catch (err) {
+      addToast(err.message || 'Failed to publish room listing', 'danger');
+      throw err;
+    }
   };
 
   // Update existing room
-  const updateRoom = (roomId, updatedData) => {
-    setRooms((prev) =>
-      prev.map((r) => (r.id === roomId ? { ...r, ...updatedData } : r))
-    );
-    addToast('Room listing updated successfully!', 'success');
-    navigateTo('my-listings');
+  const updateRoom = async (roomId, updatedData) => {
+    try {
+      const updated = await roomService.updateOwnerRoom(roomId, updatedData);
+      setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, ...updated } : r)));
+      addToast('Room listing updated successfully!', 'success');
+      navigateTo('my-listings');
+      return updated;
+    } catch (err) {
+      addToast(err.message || 'Failed to update room', 'danger');
+      throw err;
+    }
   };
 
   // Delete room
-  const deleteRoom = (roomId) => {
-    setRooms((prev) => prev.filter((r) => r.id !== roomId));
-    addToast('Listing deleted', 'info');
+  const deleteRoom = async (roomId) => {
+    try {
+      await roomService.deleteOwnerRoom(roomId);
+      setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      addToast('Listing deleted successfully', 'info');
+    } catch (err) {
+      addToast(err.message || 'Failed to delete listing', 'danger');
+    }
   };
 
   // Toggle room availability status
-  const toggleRoomStatus = (roomId) => {
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.id === roomId) {
-          const nextStatus = r.status === 'active' ? 'occupied' : 'active';
-          addToast(`Listing status updated to ${nextStatus.toUpperCase()}`);
-          return { ...r, status: nextStatus };
-        }
-        return r;
-      })
-    );
+  const toggleRoomStatus = async (roomId) => {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    const nextStatus = room.status === 'approved' || room.status === 'active' ? 'rented' : 'approved';
+    try {
+      await roomService.updateOwnerRoom(roomId, { status: nextStatus });
+      setRooms((prev) =>
+        prev.map((r) => (r.id === roomId ? { ...r, status: nextStatus } : r))
+      );
+      addToast(`Listing status updated to ${nextStatus.toUpperCase()}`);
+    } catch (err) {
+      addToast(err.message || 'Failed to update room status', 'danger');
+    }
   };
 
-  // Submit inquiry / tour request
-  const submitInquiry = (data) => {
-    const newInquiry = {
-      id: `inq-${Date.now()}`,
-      status: 'pending',
-      createdAt: 'Just now',
-      applicantName: currentUser.name,
-      applicantEmail: currentUser.email,
-      applicantPhone: currentUser.phone,
-      applicantAvatar: currentUser.avatar,
-      ...data
-    };
-    setInquiries((prev) => [newInquiry, ...prev]);
-    addToast('Tour / Inquiry request sent to landlord! 📬', 'success');
+  // Submit inquiry / booking request
+  const submitInquiry = async (data) => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      addToast('Please log in to submit a booking or tour request', 'info');
+      return;
+    }
+
+    try {
+      const newBooking = await bookingService.createBooking(data);
+      setInquiries((prev) => [newBooking, ...prev]);
+      addToast('Booking request submitted to landlord! 📬', 'success');
+      return newBooking;
+    } catch (err) {
+      addToast(err.message || 'Failed to submit booking request', 'danger');
+      throw err;
+    }
   };
 
-  // Update inquiry status (Approve / Decline)
-  const updateInquiryStatus = (inquiryId, status) => {
-    setInquiries((prev) =>
-      prev.map((inq) =>
-        inq.id === inquiryId ? { ...inq, status } : inq
-      )
-    );
-    addToast(`Inquiry ${status === 'approved' ? 'Approved ✅' : 'Declined ❌'}`);
-  };
-
-  useEffect(() => {
-    localStorage.setItem('rf_owner_requests', JSON.stringify(ownerRequests));
-  }, [ownerRequests]);
-
-  // Submit Landlord Verification Application
-  const submitOwnerVerification = (requestData) => {
-    const newReq = {
-      id: `req-${Date.now()}`,
-      applicantId: currentUser.id,
-      applicantName: currentUser.name,
-      applicantEmail: currentUser.email,
-      applicantPhone: currentUser.phone,
-      submittedAt: 'Just now',
-      status: 'pending',
-      ...requestData
-    };
-    setOwnerRequests((prev) => [newReq, ...prev]);
-
-    // Update current user state with pending verification status
-    const updatedUser = {
-      ...currentUser,
-      ownerRequestStatus: 'pending',
-      ownerRequestId: newReq.id
-    };
-    setCurrentUser(updatedUser);
-    localStorage.setItem('rf_user', JSON.stringify(updatedUser));
-
-    const log = {
-      id: `log-${Date.now()}`,
-      action: 'New Landlord Verification Application',
-      target: `${currentUser.name} (${requestData.documentType || 'ID Proof'})`,
-      actor: currentUser.name,
-      timestamp: 'Just now',
-      badge: 'warning'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast('Verification application submitted! Super Admin will review your credentials. ⏳', 'success');
-  };
-
-  // Admin Approve Owner Request
-  const approveOwnerRequest = (requestId) => {
-    const targetReq = ownerRequests.find((r) => r.id === requestId);
-    setOwnerRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, status: 'approved' } : r))
-    );
-
-    if (targetReq) {
-      // 1. Create and register the new verified landlord profile
-      const newOwner = {
-        id: targetReq.applicantId || `owner-${Date.now()}`,
-        name: targetReq.applicantName,
-        email: targetReq.applicantEmail,
-        phone: targetReq.applicantPhone,
-        status: 'verified',
-        totalProperties: 0,
-        activeRooms: 0,
-        occupiedRooms: 0,
-        joinedDate: 'Today',
-        identityDoc: targetReq.documentType || 'Verified ID',
-        rating: 5.0,
-        commissionDue: '$0.00',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
-      };
-      setOwners((prev) => [newOwner, ...prev.filter((o) => o.email !== targetReq.applicantEmail)]);
-
-      // 2. Change applicant account role from student to owner
-      if (
-        currentUser.id === targetReq.applicantId ||
-        currentUser.email?.toLowerCase() === targetReq.applicantEmail?.toLowerCase() ||
-        currentUser.name === targetReq.applicantName
-      ) {
-        const upgradedUser = {
-          ...currentUser,
-          role: 'owner',
-          ownerRequestStatus: 'approved',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
-        };
-        setCurrentUser(upgradedUser);
-        localStorage.setItem('rf_user', JSON.stringify(upgradedUser));
+  // Update booking/inquiry status (Approve / Reject)
+  const updateInquiryStatus = async (bookingId, status) => {
+    try {
+      if (status === 'approved') {
+        await bookingService.approveOwnerBooking(bookingId);
+      } else if (status === 'rejected' || status === 'declined') {
+        await bookingService.rejectOwnerBooking(bookingId);
       }
-
-      // 3. Dispatch official approval email to the applicant
-      const approvalMail = {
-        id: `mail-${Date.now()}`,
-        subject: '🎉 Congratulations! Your Landlord Verification is Approved',
-        recipients: targetReq.applicantEmail,
-        content: `Hi ${targetReq.applicantName},\n\nYour landlord application and property credentials have been verified and approved by the Super Administrator.\n\nYour account role has been upgraded to Verified Landlord. You can now access your Landlord Dashboard and start listing rooms for students!\n\nBest regards,\nRoomFinder Admin Team`,
-        sentAt: 'Just now',
-        status: 'Delivered'
-      };
-      setBroadcastEmails((prev) => [approvalMail, ...prev]);
-
-      // 4. Record audit log
-      const log = {
-        id: `log-${Date.now()}`,
-        action: 'Student Role Upgraded to Landlord (Approved)',
-        target: `${targetReq.applicantName} (${targetReq.applicantEmail})`,
-        actor: currentUser.name || 'Super Admin',
-        timestamp: 'Just now',
-        badge: 'success'
-      };
-      setAdminLogs((prev) => [log, ...prev]);
-      addToast(`🎉 ${targetReq.applicantName} has been approved and upgraded to Property Owner!`, 'success');
+      setInquiries((prev) =>
+        prev.map((inq) => (inq.id === bookingId ? { ...inq, status } : inq))
+      );
+      addToast(`Booking request ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`);
+    } catch (err) {
+      addToast(err.message || 'Failed to update booking status', 'danger');
     }
-  };
-
-  // Admin Reject Owner Request
-  const rejectOwnerRequest = (requestId, reason = 'Document verification failed') => {
-    const targetReq = ownerRequests.find((r) => r.id === requestId);
-    setOwnerRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, status: 'declined', declineReason: reason } : r))
-    );
-
-    if (targetReq && (currentUser.id === targetReq.applicantId || currentUser.email === targetReq.applicantEmail)) {
-      const declined = {
-        ...currentUser,
-        ownerRequestStatus: 'declined'
-      };
-      setCurrentUser(declined);
-      localStorage.setItem('rf_user', JSON.stringify(declined));
-    }
-
-    const log = {
-      id: `log-${Date.now()}`,
-      action: 'Landlord Application Declined',
-      target: `${targetReq?.applicantName || requestId} (${reason})`,
-      actor: currentUser.name || 'Super Admin',
-      timestamp: 'Just now',
-      badge: 'danger'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast('Application declined and feedback logged.', 'info');
-  };
-
-  // Direct Landlord Status Toggle by Admin
-  const verifyOwner = (ownerId, newStatus = 'verified') => {
-    setOwners((prev) =>
-      prev.map((o) => (o.id === ownerId ? { ...o, status: newStatus } : o))
-    );
-    const target = owners.find((o) => o.id === ownerId);
-    const log = {
-      id: `log-${Date.now()}`,
-      action: `Owner Status Updated: ${newStatus.toUpperCase()}`,
-      target: target ? target.name : ownerId,
-      actor: currentUser.name || 'Super Admin',
-      timestamp: 'Just now',
-      badge: newStatus === 'verified' ? 'success' : 'danger'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast(`Landlord ${target?.name || ''} marked as ${newStatus.toUpperCase()}!`, 'success');
-  };
-
-  // Admin Direct Register Landlord
-  const createOwner = (ownerData) => {
-    const newOwner = {
-      id: `owner-${Date.now()}`,
-      joinedDate: 'Today',
-      rating: 5.0,
-      totalProperties: 0,
-      activeRooms: 0,
-      occupiedRooms: 0,
-      commissionDue: '$0.00',
-      status: 'verified',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      ...ownerData
-    };
-    setOwners((prev) => [newOwner, ...prev]);
-    const log = {
-      id: `log-${Date.now()}`,
-      action: 'New Landlord Created & Verified',
-      target: newOwner.name,
-      actor: currentUser.name || 'Super Admin',
-      timestamp: 'Just now',
-      badge: 'success'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast(`New Property Owner ${newOwner.name} registered & verified! 🎉`, 'success');
   };
 
   // Admin Room Approvals
-  const approveRoomListing = (roomId) => {
-    setRooms((prev) =>
-      prev.map((r) => (r.id === roomId ? { ...r, verified: true, status: 'active' } : r))
-    );
-    const targetRoom = rooms.find((r) => r.id === roomId);
-    const log = {
-      id: `log-${Date.now()}`,
-      action: 'Room Verification Approved',
-      target: targetRoom ? targetRoom.title : roomId,
-      actor: currentUser.name || 'Super Admin',
-      timestamp: 'Just now',
-      badge: 'success'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast(`Room "${targetRoom?.title || ''}" verified & published! ✅`, 'success');
+  const approveRoomListing = async (roomId) => {
+    try {
+      await adminService.approveRoom(roomId);
+      setRooms((prev) =>
+        prev.map((r) => (r.id === roomId ? { ...r, status: 'approved', is_verified: true, verified: true } : r))
+      );
+      addToast('Room verified & published! ✅', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to approve room', 'danger');
+    }
   };
 
-  const rejectRoomListing = (roomId, reason = 'Missing required property documentation') => {
-    setRooms((prev) =>
-      prev.map((r) => (r.id === roomId ? { ...r, verified: false, status: 'draft' } : r))
-    );
-    const targetRoom = rooms.find((r) => r.id === roomId);
-    const log = {
-      id: `log-${Date.now()}`,
-      action: 'Room Verification Rejected',
-      target: `${targetRoom?.title || roomId} (${reason})`,
-      actor: currentUser.name || 'Super Admin',
-      timestamp: 'Just now',
-      badge: 'danger'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast('Listing returned to draft. Feedback sent to owner.', 'info');
+  const rejectRoomListing = async (roomId, reason = 'Listing details did not meet requirements') => {
+    try {
+      await adminService.rejectRoom(roomId, reason);
+      setRooms((prev) =>
+        prev.map((r) => (r.id === roomId ? { ...r, status: 'rejected', is_verified: false, verified: false } : r))
+      );
+      addToast('Room listing rejected.', 'info');
+    } catch (err) {
+      addToast(err.message || 'Failed to reject room', 'danger');
+    }
   };
 
-  const featureRoomListing = (roomId) => {
-    setRooms((prev) =>
-      prev.map((r) => (r.id === roomId ? { ...r, featured: !r.featured } : r))
-    );
-    const target = rooms.find((r) => r.id === roomId);
-    addToast(`Listing "${target?.title}" ${!target?.featured ? 'featured on Home page ⭐' : 'removed from featured'}`);
-  };
-
-  // Broadcast Email Dispatch
-  const sendAdminEmail = (emailData) => {
-    const newMail = {
-      id: `mail-${Date.now()}`,
-      sentAt: 'Just now',
-      status: 'Delivered',
-      ...emailData
-    };
-    setBroadcastEmails((prev) => [newMail, ...prev]);
-    const log = {
-      id: `log-${Date.now()}`,
-      action: 'Email Broadcast Dispatched',
-      target: `${newMail.subject} (${newMail.recipients})`,
-      actor: currentUser.name || 'Super Admin',
-      timestamp: 'Just now',
-      badge: 'info'
-    };
-    setAdminLogs((prev) => [log, ...prev]);
-    addToast(`Email notification sent to ${newMail.recipients}! 📨`, 'success');
+  // Direct Landlord Status Toggle by Admin
+  const verifyOwner = async (ownerId, newStatus = 'active') => {
+    try {
+      if (newStatus === 'suspended' || newStatus === 'banned') {
+        await adminService.suspendUser(ownerId);
+      } else {
+        await adminService.activateUser(ownerId);
+      }
+      setOwners((prev) =>
+        prev.map((o) => (o.id === ownerId ? { ...o, status: newStatus } : o))
+      );
+      addToast(`User account updated to ${newStatus.toUpperCase()}!`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to update user status', 'danger');
+    }
   };
 
   return (
     <AppContext.Provider
       value={{
         rooms,
+        featuredRooms,
         favorites,
         inquiries,
         owners,
         ownerRequests,
         adminLogs,
         broadcastEmails,
+        adminStats,
         currentUser,
         setCurrentUser,
+        isLoadingRooms,
+        isLoadingAuth,
         activePage,
         pageParams,
         navigateTo,
@@ -589,6 +404,11 @@ export const AppProvider = ({ children }) => {
         switchRole,
         searchFilters,
         setSearchFilters,
+        fetchRooms,
+        fetchFeaturedRooms,
+        fetchFavorites,
+        fetchInquiries,
+        fetchAdminData,
         addRoom,
         updateRoom,
         deleteRoom,
@@ -596,14 +416,8 @@ export const AppProvider = ({ children }) => {
         submitInquiry,
         updateInquiryStatus,
         verifyOwner,
-        createOwner,
         approveRoomListing,
         rejectRoomListing,
-        featureRoomListing,
-        sendAdminEmail,
-        submitOwnerVerification,
-        approveOwnerRequest,
-        rejectOwnerRequest,
         loginUser,
         logoutUser,
         toasts,
