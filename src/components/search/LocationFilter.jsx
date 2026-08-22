@@ -1,10 +1,12 @@
 import React from 'react';
-import { POPULAR_LOCATIONS } from '../../constants/roomConstants';
+import { useApp } from '../../context/AppContext';
 
 export const LocationFilter = ({ selectedLocation, onSelectLocation }) => {
+  const { popularLocations } = useApp();
+
   return (
     <div className="filter-group">
-      <label className="filter-group-title">Campus & Hub Vicinity</label>
+      <label className="filter-group-title">Campus &amp; Hub Vicinity</label>
       <div className="filter-type-grid">
         <button
           type="button"
@@ -13,7 +15,7 @@ export const LocationFilter = ({ selectedLocation, onSelectLocation }) => {
         >
           All Locations
         </button>
-        {POPULAR_LOCATIONS.map((loc, idx) => (
+        {popularLocations.map((loc, idx) => (
           <button
             key={idx}
             type="button"

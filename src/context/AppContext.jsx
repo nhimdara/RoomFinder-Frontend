@@ -4,6 +4,7 @@ import roomService from '../services/roomService';
 import bookingService from '../services/bookingService';
 import favoriteService from '../services/favoriteService';
 import adminService from '../services/adminService';
+import locationService, { FALLBACK_LOCATIONS } from '../services/locationService';
 
 const AppContext = createContext();
 
@@ -11,6 +12,7 @@ export const AppProvider = ({ children }) => {
   // Live state from Backend API
   const [rooms, setRooms] = useState([]);
   const [featuredRooms, setFeaturedRooms] = useState([]);
+  const [popularLocations, setPopularLocations] = useState(FALLBACK_LOCATIONS);
   const [favorites, setFavorites] = useState([]); // List of room IDs
   const [inquiries, setInquiries] = useState([]); // Bookings / inquiries
   const [owners, setOwners] = useState([]);
@@ -97,6 +99,16 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
+  // Fetch popular campus locations derived from live room data
+  const fetchPopularLocations = useCallback(async () => {
+    try {
+      const data = await locationService.getPopularLocations();
+      setPopularLocations(Array.isArray(data) && data.length > 0 ? data : FALLBACK_LOCATIONS);
+    } catch {
+      setPopularLocations(FALLBACK_LOCATIONS);
+    }
+  }, []);
+
   // Fetch user favorites
   const fetchFavorites = useCallback(async () => {
     if (!currentUser || currentUser.role !== 'student') return;
@@ -167,7 +179,8 @@ export const AppProvider = ({ children }) => {
     initAuth();
     fetchRooms();
     fetchFeaturedRooms();
-  }, [fetchRooms, fetchFeaturedRooms]);
+    fetchPopularLocations();
+  }, [fetchRooms, fetchFeaturedRooms, fetchPopularLocations]);
 
   // Sync user-dependent data
   useEffect(() => {
@@ -386,6 +399,7 @@ export const AppProvider = ({ children }) => {
       value={{
         rooms,
         featuredRooms,
+        popularLocations,
         favorites,
         inquiries,
         owners,

@@ -2,17 +2,13 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { HeroSearch } from '../components/search/HeroSearch';
 import { RoomCard } from '../components/room/RoomCard';
-import { POPULAR_LOCATIONS } from '../constants/roomConstants';
 import {
   ShieldCheck,
   Zap,
   BadgePercent,
-  MessageSquare,
   ArrowRight,
   Sparkles,
-  MapPin,
   Star,
-  CheckCircle2,
   Users,
   PlusCircle,
   Building,
@@ -20,9 +16,9 @@ import {
 } from 'lucide-react';
 
 export const Home = () => {
-  const { rooms, currentUser = { role: 'student' }, favorites = [], navigateTo, setSearchFilters, switchRole } = useApp();
+  const { rooms, featuredRooms, popularLocations, currentUser = { role: 'student' }, favorites = [], navigateTo, setSearchFilters } = useApp();
 
-  const featuredRooms = rooms.filter((r) => r.featured).slice(0, 4);
+  const displayFeaturedRooms = featuredRooms.length > 0 ? featuredRooms.slice(0, 4) : rooms.filter((r) => r.featured || r.is_featured).slice(0, 4);
 
   return (
     <div className="home-page-wrapper animate-fade-in">
@@ -65,7 +61,7 @@ export const Home = () => {
           </div>
 
           <div className="locations-grid">
-            {POPULAR_LOCATIONS.map((loc, idx) => (
+            {popularLocations.map((loc, idx) => (
               <div
                 key={idx}
                 className="location-card"
@@ -107,7 +103,7 @@ export const Home = () => {
           </div>
 
           <div className="rooms-grid-container">
-            {featuredRooms.map((room) => (
+            {displayFeaturedRooms.map((room) => (
               <RoomCard key={room.id} room={room} />
             ))}
           </div>
