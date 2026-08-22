@@ -80,7 +80,7 @@ export const AppProvider = ({ children }) => {
   const fetchRooms = useCallback(async (filters = {}) => {
     setIsLoadingRooms(true);
     try {
-      const data = await roomService.getRooms(filters);
+      const data = await roomService.getRooms({ per_page: 50, ...filters });
       setRooms(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load rooms from backend:', err);

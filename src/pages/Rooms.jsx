@@ -22,13 +22,19 @@ export const Rooms = () => {
   // Apply filters to rooms
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
-      // Keyword search (matches title, address, description)
+      // Keyword search (matches title, address, description, and sub-tokens)
       if (searchFilters.keyword) {
         const query = searchFilters.keyword.toLowerCase().trim();
-        const titleMatch = (room.title || '').toLowerCase().includes(query);
-        const addressMatch = (room.address || room.location || '').toLowerCase().includes(query);
-        const descMatch = (room.description || '').toLowerCase().includes(query);
-        if (!titleMatch && !addressMatch && !descMatch) return false;
+        const fullTarget = `${room.title || ''} ${room.address || ''} ${room.location || ''} ${room.description || ''}`.toLowerCase();
+
+        let matches = fullTarget.includes(query);
+        if (!matches) {
+          const terms = query.split(/[\s,&+/]+/).filter((t) => t.length >= 3);
+          if (terms.length > 0) {
+            matches = terms.some((term) => fullTarget.includes(term));
+          }
+        }
+        if (!matches) return false;
       }
 
       // Room Type filter
@@ -38,8 +44,9 @@ export const Rooms = () => {
       }
 
       // Price filter
-      if (searchFilters.maxPrice && room.price > searchFilters.maxPrice) return false;
-      if (searchFilters.minPrice && room.price < searchFilters.minPrice) return false;
+      const roomPrice = Number(room.price) || 0;
+      if (searchFilters.maxPrice && roomPrice > Number(searchFilters.maxPrice)) return false;
+      if (searchFilters.minPrice && roomPrice < Number(searchFilters.minPrice)) return false;
 
       // Amenities filter (must contain all selected amenities)
       if (searchFilters.selectedAmenities && searchFilters.selectedAmenities.length > 0) {
@@ -54,8 +61,10 @@ export const Rooms = () => {
 
       return true;
     }).sort((a, b) => {
-      if (searchFilters.sortBy === 'price-low') return a.price - b.price;
-      if (searchFilters.sortBy === 'price-high') return b.price - a.price;
+      const priceA = Number(a.price) || 0;
+      const priceB = Number(b.price) || 0;
+      if (searchFilters.sortBy === 'price-low') return priceA - priceB;
+      if (searchFilters.sortBy === 'price-high') return priceB - priceA;
       if (searchFilters.sortBy === 'rating') return (b.average_rating || b.rating || 0) - (a.average_rating || a.rating || 0);
       return 0; // recommended
     });

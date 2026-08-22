@@ -77,7 +77,7 @@ export const Home = () => {
                 <div className="location-overlay">
                   <span className="location-tag-pill">{loc.tag}</span>
                   <h3 className="location-name">{loc.name}</h3>
-                  <p className="location-room-count">{loc.count} available</p>
+                  <p className="location-room-count">{loc.count}</p>
                 </div>
               </div>
             ))}
