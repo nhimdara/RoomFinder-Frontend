@@ -11,8 +11,8 @@ export const locationService = {
    */
   getPopularLocations: async () => {
     try {
-      const response = await apiClient.get('rooms', { per_page: 100, sort: 'recommended' });
-      const rooms = response?.data || [];
+      const response = await apiClient.get('rooms', { per_page: 50, sort: 'recommended' });
+      const rooms = response?.data || response || [];
 
       // Derive popular neighborhoods from actual room address data
       const locationMap = {};
