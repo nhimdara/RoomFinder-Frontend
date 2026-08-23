@@ -1,7 +1,7 @@
 /**
  * Real API client for University RoomFinder Laravel Backend
  */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://roomfinder-backend-ozp3.onrender.com/api';
 
 const getHeaders = (isFormData = false, customHeaders = {}) => {
   const token = localStorage.getItem('rf_token');
