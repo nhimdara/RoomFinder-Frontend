@@ -40,7 +40,7 @@ export const Navbar = () => {
         {/* Brand Logo */}
         <div
           className="brand-logo"
-          onClick={() => navigateTo(currentUser.role === 'owner' ? 'owner-dashboard' : 'home')}
+          onClick={() => navigateTo(currentUser?.role === 'owner' ? 'owner-dashboard' : 'home')}
         >
           <div className="logo-icon-wrap">
             <Building2 size={24} color="#ffffff" strokeWidth={2.5} />
@@ -53,7 +53,7 @@ export const Navbar = () => {
 
         {/* Desktop Navigation Links */}
         <nav className="desktop-nav">
-          {currentUser.role === 'admin' ? (
+          {currentUser?.role === 'admin' ? (
             <>
               <button
                 className={`nav-link ${activePage === 'admin-dashboard' ? 'active' : ''}`}
@@ -77,7 +77,7 @@ export const Navbar = () => {
                 <span>Browse Rooms</span>
               </button>
             </>
-          ) : currentUser.role === 'owner' ? (
+          ) : currentUser?.role === 'owner' ? (
             <>
               <button
                 className={`nav-link ${activePage === 'owner-dashboard' ? 'active' : ''}`}
@@ -338,7 +338,7 @@ export const Navbar = () => {
       {isMobileMenuOpen && (
         <div className="mobile-drawer animate-fade-in">
           <div className="mobile-nav-links">
-            {currentUser.role === 'student' ? (
+            {currentUser?.role === 'student' || !currentUser ? (
               <>
                 <button
                   className="mobile-link"

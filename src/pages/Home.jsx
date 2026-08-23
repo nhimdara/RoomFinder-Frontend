@@ -12,11 +12,22 @@ import {
   Users,
   PlusCircle,
   Building,
-  Search
+  Building2,
+  Search,
+  RotateCcw
 } from 'lucide-react';
 
 export const Home = () => {
-  const { rooms, featuredRooms, popularLocations, currentUser = { role: 'student' }, favorites = [], navigateTo, setSearchFilters } = useApp();
+  const {
+    rooms,
+    featuredRooms,
+    popularLocations,
+    currentUser = { role: 'student' },
+    favorites = [],
+    navigateTo,
+    setSearchFilters,
+    fetchRooms
+  } = useApp();
 
   const displayFeaturedRooms = featuredRooms.length > 0 ? featuredRooms.slice(0, 4) : rooms.filter((r) => r.featured || r.is_featured).slice(0, 4);
 
@@ -102,11 +113,48 @@ export const Home = () => {
             </button>
           </div>
 
-          <div className="rooms-grid-container">
-            {displayFeaturedRooms.map((room) => (
-              <RoomCard key={room.id} room={room} />
-            ))}
-          </div>
+          {displayFeaturedRooms.length > 0 ? (
+            <div className="rooms-grid-container">
+              {displayFeaturedRooms.map((room) => (
+                <RoomCard key={room.id} room={room} />
+              ))}
+            </div>
+          ) : (
+            <div
+              className="card"
+              style={{
+                textAlign: 'center',
+                padding: '48px 24px',
+                borderRadius: '16px',
+                background: '#F8FAFC',
+                border: '1.5px dashed #CBD5E1'
+              }}
+            >
+              <Building2 size={40} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1E293B', marginBottom: '6px' }}>
+                No rooms listed yet on the live server
+              </h3>
+              <p style={{ fontSize: '14px', color: '#64748B', maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                Your Render database is fresh. Seed your database using <code>php artisan db:seed</code> on Render, or sign in as an owner to post your first room!
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigateTo('post-room')}
+                >
+                  <PlusCircle size={16} />
+                  <span>Post First Room</span>
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => fetchRooms()}
+                >
+                  <RotateCcw size={16} />
+                  <span>Refresh Listings</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -207,7 +255,7 @@ export const Home = () => {
       {/* Call to Action Banner */}
       <section className="home-section owner-cta-section">
         <div className="app-container">
-          {currentUser.role === 'student' ? (
+          {currentUser?.role === 'student' || !currentUser ? (
             <div className="owner-cta-banner" style={{ background: 'linear-gradient(135deg, #1E40AF 0%, #1E293B 100%)' }}>
               <div className="owner-cta-content">
                 <span className="cta-badge">STUDENT HOUSING</span>
