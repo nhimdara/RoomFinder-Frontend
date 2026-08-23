@@ -31,6 +31,14 @@ const handleResponse = async (response) => {
     data = await response.text();
   }
 
+  if (response.status === 401) {
+    localStorage.removeItem('rf_token');
+    localStorage.removeItem('rf_user');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
+  }
+
   if (!response.ok) {
     const errorMessage =
       (data && data.message) ||

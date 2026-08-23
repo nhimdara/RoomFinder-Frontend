@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
+import authService from '../../services/authService';
 import {
   X,
   Building2,
@@ -14,7 +15,8 @@ import {
   Sparkles,
   Eye,
   EyeOff,
-  Phone
+  Phone,
+  Loader2
 } from 'lucide-react';
 
 export const AuthModal = () => {
@@ -30,14 +32,15 @@ export const AuthModal = () => {
   // Mode: 'login' | 'register' | 'forgot' | 'verify-otp' | 'reset-password'
   const [currentMode, setCurrentMode] = useState(authMode || 'login');
 
-  const [email, setEmail] = useState('alex.rivera@university.edu');
-  const [password, setPassword] = useState('••••••••');
+  const [email, setEmail] = useState('bopha.student@roomfinder.test');
+  const [password, setPassword] = useState('password');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [name, setName] = useState('Alex Rivera');
-  const [phone, setPhone] = useState('+1 (555) 234-8901');
+  const [name, setName] = useState('Bopha Chan');
+  const [phone, setPhone] = useState('012345678');
   const [role, setRole] = useState('student'); // 'student' | 'owner'
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // OTP state
   const [otpCode, setOtpCode] = useState(['8', '4', '9', '2', '0', '1']);
@@ -143,50 +146,47 @@ export const AuthModal = () => {
   };
 
   // Login Submit
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const isSuperAdmin = email.toLowerCase().includes('admin');
-    const isOwner =
-      email.toLowerCase().includes('sarah') ||
-      email.toLowerCase().includes('landlord') ||
-      email.toLowerCase().includes('realty') ||
-      email.toLowerCase().includes('chen') ||
-      email.toLowerCase().includes('vance');
-    const detectedRole = isSuperAdmin ? 'admin' : isOwner ? 'owner' : 'student';
-
-    loginUser({
-      id: `user-${Date.now()}`,
-      name: isSuperAdmin ? 'Platform Super Admin' : isOwner ? 'Sarah Jenkins' : (name || 'Alex Rivera'),
-      email: email || (isSuperAdmin ? 'admin@roomfinder.com' : isOwner ? 'sarah.j@roomfinder.com' : 'alex.rivera@university.edu'),
-      avatar: isSuperAdmin
-        ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'
-        : isOwner
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      role: detectedRole,
-      phone: phone || '+1 (555) 234-8901'
-    });
+    setIsSubmitting(true);
+    try {
+      const data = await authService.login(email, password);
+      if (data?.user) {
+        loginUser(data.user);
+      }
+    } catch (err) {
+      addToast(err.message || 'Login failed. Please check your credentials.', 'danger');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Register Submit
-  const handleRegisterSubmit = (e) => {
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     if (!name || !email || !password) {
-      addToast('Please fill all required registration fields', 'error');
+      addToast('Please fill all required registration fields', 'danger');
       return;
     }
-    const isOwner = email.toLowerCase().includes('landlord') || email.toLowerCase().includes('realty');
-    const detectedRole = isOwner ? 'owner' : 'student';
-
-    loginUser({
-      id: `user-${Date.now()}`,
-      name: name,
-      email: email,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      role: detectedRole,
-      phone: phone
-    });
-    addToast(`Account created successfully! Welcome to RoomFinder, ${name}! 🎉`, 'success');
+    setIsSubmitting(true);
+    try {
+      const data = await authService.register({
+        name,
+        email,
+        phone,
+        password,
+        password_confirmation: confirmPassword || password,
+        role: role || 'student'
+      });
+      if (data?.user) {
+        loginUser(data.user);
+        addToast(`Account created successfully! Welcome to RoomFinder, ${data.user.name}! 🎉`, 'success');
+      }
+    } catch (err) {
+      addToast(err.message || 'Registration failed. Please check your inputs.', 'danger');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

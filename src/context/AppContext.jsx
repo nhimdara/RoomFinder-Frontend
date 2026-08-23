@@ -28,8 +28,9 @@ export const AppProvider = ({ children }) => {
   // Authenticated user
   const [currentUser, setCurrentUser] = useState(() => {
     try {
+      const token = localStorage.getItem('rf_token');
       const saved = localStorage.getItem('rf_user');
-      return saved ? JSON.parse(saved) : null;
+      return token && saved ? JSON.parse(saved) : null;
     } catch {
       return null;
     }
@@ -83,7 +84,7 @@ export const AppProvider = ({ children }) => {
       const data = await roomService.getRooms({ per_page: 50, ...filters });
       setRooms(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to load rooms from backend:', err);
+      console.warn('Failed to load rooms from backend:', err?.message || err);
     } finally {
       setIsLoadingRooms(false);
     }
@@ -95,7 +96,7 @@ export const AppProvider = ({ children }) => {
       const data = await roomService.getFeaturedRooms();
       setFeaturedRooms(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to load featured rooms:', err);
+      console.warn('Failed to load featured rooms:', err?.message || err);
     }
   }, []);
 
@@ -111,19 +112,23 @@ export const AppProvider = ({ children }) => {
 
   // Fetch user favorites
   const fetchFavorites = useCallback(async () => {
-    if (!currentUser || currentUser.role !== 'student') return;
+    const token = localStorage.getItem('rf_token');
+    if (!token || !currentUser || currentUser.role !== 'student') return;
     try {
       const data = await favoriteService.getFavorites();
       const favIds = Array.isArray(data) ? data.map((r) => r.id) : [];
       setFavorites(favIds);
     } catch (err) {
-      console.error('Failed to fetch favorites:', err);
+      if (err?.status !== 401) {
+        console.warn('Failed to fetch favorites:', err?.message || err);
+      }
     }
   }, [currentUser]);
 
   // Fetch inquiries / bookings
   const fetchInquiries = useCallback(async () => {
-    if (!currentUser) return;
+    const token = localStorage.getItem('rf_token');
+    if (!token || !currentUser) return;
     try {
       if (currentUser.role === 'owner') {
         const data = await bookingService.getOwnerBookings();
@@ -136,20 +141,25 @@ export const AppProvider = ({ children }) => {
         setInquiries(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error('Failed to fetch bookings/inquiries:', err);
+      if (err?.status !== 401) {
+        console.warn('Failed to fetch bookings/inquiries:', err?.message || err);
+      }
     }
   }, [currentUser]);
 
   // Fetch admin dashboard stats & data
   const fetchAdminData = useCallback(async () => {
-    if (!currentUser || currentUser.role !== 'admin') return;
+    const token = localStorage.getItem('rf_token');
+    if (!token || !currentUser || currentUser.role !== 'admin') return;
     try {
       const stats = await adminService.getDashboard();
       setAdminStats(stats);
       const userList = await adminService.getUsers();
       setOwners(Array.isArray(userList) ? userList.filter((u) => u.role === 'owner') : []);
     } catch (err) {
-      console.error('Failed to fetch admin data:', err);
+      if (err?.status !== 401) {
+        console.warn('Failed to fetch admin data:', err?.message || err);
+      }
     }
   }, [currentUser]);
 
@@ -172,6 +182,10 @@ export const AppProvider = ({ children }) => {
           localStorage.removeItem('rf_user');
           setCurrentUser(null);
         }
+      } else {
+        localStorage.removeItem('rf_token');
+        localStorage.removeItem('rf_user');
+        setCurrentUser(null);
       }
       setIsLoadingAuth(false);
     };
@@ -180,18 +194,26 @@ export const AppProvider = ({ children }) => {
     fetchRooms();
     fetchFeaturedRooms();
     fetchPopularLocations();
+
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
   }, [fetchRooms, fetchFeaturedRooms, fetchPopularLocations]);
 
   // Sync user-dependent data
   useEffect(() => {
-    if (currentUser) {
+    if (!isLoadingAuth && currentUser) {
       fetchFavorites();
       fetchInquiries();
       if (currentUser.role === 'admin') {
         fetchAdminData();
       }
     }
-  }, [currentUser, fetchFavorites, fetchInquiries, fetchAdminData]);
+  }, [currentUser, isLoadingAuth, fetchFavorites, fetchInquiries, fetchAdminData]);
 
   // Auth actions
   const loginUser = (userObj) => {
